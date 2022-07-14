@@ -10,10 +10,10 @@ central_teeth = 40;
 peripheral_teeth = 60;
 
 // Gearbox dimensions
-modul = 2;
-vertical_distance = 24;
+modul = 3;
+vertical_distance = 32;
 worm_length = 32;
-central_gear_height = 20;
+central_gear_height = 42;
 central_gear_angle = 20;
 peripheral_gear_height = 10;
 rod_diameter = 8;
@@ -53,7 +53,7 @@ module central_gear(modul, teeth, threads, height, central_helix_angle, worm_ang
   gamma = -90 * height * sin(worm_angle) / (pi * radius_gear);
   translate([0, 0, -height / 2])
     rotate([0, 0, gamma + rotation])
-    stirnrad(modul, teeth, height, radius_gear * 2, central_helix_angle, -worm_angle, false);
+    stirnrad(modul, teeth, height, rod_diameter, central_helix_angle, -worm_angle, false);
 }
 
 module peripheral_gear(helix_angle) {
@@ -66,28 +66,72 @@ module peripheral_gear(helix_angle) {
            optimiert=false);
 }
 
-module triple_gear(central_angle, peripheral_angle, helix_angle) {
-  central_gear(modul, central_teeth, threads, central_gear_height, central_gear_angle, central_helix_angle, central_angle);
-  translate([0, 0, vertical_distance])
-    rotate(peripheral_angle, [0, 0, 1])
-    peripheral_gear(helix_angle);
-  translate([0, 0, -vertical_distance - peripheral_gear_height])
-    rotate(peripheral_angle, [0, 0, 1])
-    peripheral_gear(-helix_angle);
+module _half_reel() {
+  gap = modul * (threads / (2 * sin(central_helix_angle)) - pi / 2);
+  width = peripheral_modul * peripheral_teeth / 2;
+  translate([0, 0, -vertical_distance])
+    difference() {
+    rotate_extrude(angle=360, convexity=10)
+      difference() {
+      square([width, vertical_distance - central_gear_height / 2]);
+      translate([width, gap, 0])
+        circle(gap);
+    }
+    cylinder(r=rod_diameter/2, h=vertical_distance);
+  }
+}
+
+module half_reel() {
+  gap = modul * (threads / (2 * sin(central_helix_angle)));
+  width = peripheral_modul * peripheral_teeth / 2;
+  translate([0, 0, -vertical_distance])
+    difference() {
+    rotate_extrude(angle=360, convexity=10)
+      difference() {
+      square([width, vertical_distance - central_gear_height / 2]);
+      translate([width, gap, 0])
+        circle(gap);
+    }
+    cylinder(r=rod_diameter/2, h=vertical_distance);
+  }
+}
+
+module gear_reel(central_angle, peripheral_angle, helix_angle) {
+  difference() {
+    union() {
+      central_gear(modul, central_teeth, threads, central_gear_height, central_gear_angle, central_helix_angle, central_angle);
+
+      translate([0, 0, vertical_distance])
+        rotate(peripheral_angle, [0, 0, 1])
+        peripheral_gear(helix_angle);
+
+      translate([0, 0, -vertical_distance - peripheral_gear_height])
+        rotate(peripheral_angle, [0, 0, 1])
+        peripheral_gear(-helix_angle);
+
+      half_reel();
+      rotate(180, [0, 1, 0])
+        half_reel();
+    }
+    translate([0, 0, -vertical_distance - peripheral_gear_height - 1])
+      _cylinder(h=2 * (vertical_distance + peripheral_gear_height + 1),
+               r=rod_diameter);
+  }
+
 }
 
 module gearbox() {
   worm(modul, central_teeth, threads, central_pressure_angle, central_helix_angle, worm_length, rotation);
 
   translate([-d, 0, 0])
-    triple_gear(rotation,
-                rotation,
-                peripheral_helix_angle);
+    gear_reel(rotation,
+              rotation,
+              peripheral_helix_angle);
 
   translate([d, 0, 0])
-    triple_gear(- rotation - 180 / central_teeth,
-                -rotation - 180 / peripheral_teeth,
-                -peripheral_helix_angle);
+    gear_reel(- rotation - 180 / central_teeth,
+              -rotation - 180 / peripheral_teeth,
+              -peripheral_helix_angle);
 }
 
 gearbox();
