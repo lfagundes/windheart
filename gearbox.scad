@@ -1,23 +1,27 @@
-use <Getriebe.scad>;
+use <Getriebe.scad>
+use <./pump.scad>
 
 rotation = $t * 360 ;
 
-// Gear traction will be given by central_teeth / threads
+// Gear traction will be given by these
 threads = 3;
 central_teeth = 40;
+pitman_radius = 50;
+pitman_length = 400;
+pump_distance = 120;
 
-// Just a reasonable number, git will be calculated
+// Just a reasonable number, it will be calculated
 peripheral_teeth = 60;
 
 // Gearbox dimensions
 modul = 3;
 vertical_distance = 32;
-worm_length = 32;
+worm_length = 40;
 central_gear_height = 42;
 central_gear_angle = 20;
 peripheral_gear_height = 10;
+pitman_distance = 20;
 rod_diameter = 8;
-
 
 // Gear traction angles
 central_pressure_angle = 20;
@@ -25,7 +29,8 @@ central_helix_angle = 10;
 peripheral_pressure_angle = 20;
 peripheral_helix_angle = -30;
 
-pitman_radius = 50;
+// Pump
+pump_min_length = 205.5;
 
 pi = 3.14159;
 
@@ -66,21 +71,6 @@ module peripheral_gear(helix_angle) {
            optimiert=false);
 }
 
-module _half_reel() {
-  gap = modul * (threads / (2 * sin(central_helix_angle)) - pi / 2);
-  width = peripheral_modul * peripheral_teeth / 2;
-  translate([0, 0, -vertical_distance])
-    difference() {
-    rotate_extrude(angle=360, convexity=10)
-      difference() {
-      square([width, vertical_distance - central_gear_height / 2]);
-      translate([width, gap, 0])
-        circle(gap);
-    }
-    cylinder(r=rod_diameter/2, h=vertical_distance);
-  }
-}
-
 module half_reel() {
   gap = modul * (threads / (2 * sin(central_helix_angle)));
   width = peripheral_modul * peripheral_teeth / 2;
@@ -113,25 +103,87 @@ module gear_reel(central_angle, peripheral_angle, helix_angle) {
       rotate(180, [0, 1, 0])
         half_reel();
     }
-    translate([0, 0, -vertical_distance - peripheral_gear_height - 1])
-      _cylinder(h=2 * (vertical_distance + peripheral_gear_height + 1),
-               r=rod_diameter);
+    translate([pitman_radius * cos(central_angle),
+               pitman_radius * sin(central_angle),
+               -vertical_distance - peripheral_gear_height - 20])
+      cylinder(r=rod_diameter/2, h=2 * vertical_distance + 2 * peripheral_gear_height + 40);
+
   }
+}
+
+module pitman_arm(driver_angle) {
+  rotate(90, [1, 0, 0])
+    cylinder(r=rod_diameter / 2,
+             h=pitman_length);
 
 }
 
 module gearbox() {
+  // The central driver, attached to the windmill helix
   worm(modul, central_teeth, threads, central_pressure_angle, central_helix_angle, worm_length, rotation);
 
+  // The first gear reel, with three gears
   translate([-d, 0, 0])
     gear_reel(rotation,
               rotation,
               peripheral_helix_angle);
 
+  rotation_b = -rotation - 180 / central_teeth + 180;
+
+  // Second gear reel, on opposite side of worm
   translate([d, 0, 0])
-    gear_reel(- rotation - 180 / central_teeth,
+    gear_reel(rotation_b,
               -rotation - 180 / peripheral_teeth,
               -peripheral_helix_angle);
+
+
+  // The two rods that holding pitman arms
+  translate([pitman_radius * cos(rotation) - d,
+             pitman_radius * sin(rotation),
+             -vertical_distance - peripheral_gear_height - pitman_distance])
+    cylinder(r=rod_diameter/2, h=2 * vertical_distance + 2 * peripheral_gear_height + 2 * pitman_distance);
+
+  translate([pitman_radius * cos(rotation_b) + d,
+             pitman_radius * sin(rotation_b),
+             -vertical_distance - peripheral_gear_height - pitman_distance])
+    cylinder(r=rod_diameter/2, h=2 * vertical_distance + 2 * peripheral_gear_height + 2 * pitman_distance);
+
+  // The pitman arms
+  x = pitman_radius * cos(rotation);
+  y = pitman_radius * sin(rotation);
+  z = vertical_distance + peripheral_gear_height + pitman_distance;
+
+  pitman_angle = asin((d - x) / pitman_length);
+
+  translate([x - d, y, z])
+    rotate([0, 0, pitman_angle])
+    pitman_arm();
+  translate([-x + d, y, z])
+    rotate([0, 0, -pitman_angle])
+    pitman_arm();
+
+  translate([x - d, y, -z])
+    rotate([0, 0, pitman_angle])
+    pitman_arm();
+  translate([-x + d, y, -z])
+    rotate([0, 0, -pitman_angle])
+    pitman_arm();
+
+  // The pump handle holder
+  translate([0,
+             y - pitman_length * cos(pitman_angle),
+             -z])
+  cylinder(r=rod_diameter / 2,
+           h=2 * z);
+
+  // The pump
+  pump_course = -y + pitman_length * cos(pitman_angle) - pump_min_length - pump_distance;
+
+  translate([0,
+             -pump_distance,
+             0])
+  rotate(90, [1, 0, 0])
+    pump(pump_course, 0);
 }
 
 gearbox();
