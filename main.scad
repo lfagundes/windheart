@@ -1,5 +1,7 @@
 use <Getriebe.scad>
 use <./pump.scad>
+use <./pitman.scad>
+use <./chassi.scad>
 
 rotation = $t * 360 ;
 
@@ -17,6 +19,7 @@ peripheral_teeth = 60;
 modul = 3;
 vertical_distance = 32;
 worm_length = 40;
+worm_holder_length = 10;
 central_gear_height = 42;
 central_gear_angle = 20;
 peripheral_gear_height = 10;
@@ -32,11 +35,13 @@ peripheral_helix_angle = -30;
 // Pump
 pump_min_length = 205.5;
 
+// Case
+case_thickness = 3;
+
 pi = 3.14159;
 
 peripheral_gear_radius = modul * central_teeth / 2 + modul * threads / (2 * sin(central_helix_angle));
 
-//d == peripheral_teeth * modul / 2;
 peripheral_modul = 2 * peripheral_gear_radius / peripheral_teeth;
 
 d = peripheral_gear_radius;
@@ -48,6 +53,13 @@ module worm(modul, teeth, threads, central_pressure_angle, central_helix_angle, 
   rotate([90, 180 / threads, 0])
     rotate(rotation * teeth / threads, [0, 0, 1])
     schnecke(modul, threads, length, rod_diameter, central_pressure_angle, central_helix_angle);
+  translate([0, length / 2 + 10 - 1, 0])
+  rotate(90, [1, 0, 0])
+    difference() {
+    cylinder(r=rod_diameter + case_thickness, h=worm_holder_length);
+    translate([0, 0, -1])
+      cylinder(r=rod_diameter / 2, h=45);
+  }
 }
 
 module central_gear(modul, teeth, threads, height, central_helix_angle, worm_angle, rotation) {
@@ -58,14 +70,14 @@ module central_gear(modul, teeth, threads, height, central_helix_angle, worm_ang
   gamma = -90 * height * sin(worm_angle) / (pi * radius_gear);
   translate([0, 0, -height / 2])
     rotate([0, 0, gamma + rotation])
-    stirnrad(modul, teeth, height, rod_diameter, central_helix_angle, -worm_angle, false);
+    stirnrad(modul, teeth, height, 0, central_helix_angle, -worm_angle, false);
 }
 
 module peripheral_gear(helix_angle) {
   pfeilrad(modul=peripheral_modul,
            zahnzahl=peripheral_teeth,
            breite=peripheral_gear_height,
-           bohrung=8,
+           bohrung=0,
            eingriffswinkel=peripheral_pressure_angle,
            schraegungswinkel=helix_angle,
            optimiert=false);
@@ -75,14 +87,11 @@ module half_reel() {
   gap = modul * (threads / (2 * sin(central_helix_angle)));
   width = peripheral_modul * peripheral_teeth / 2;
   translate([0, 0, -vertical_distance])
-    difference() {
     rotate_extrude(angle=360, convexity=10)
-      difference() {
-      square([width, vertical_distance - central_gear_height / 2]);
-      translate([width, gap, 0])
-        circle(gap);
-    }
-    cylinder(r=rod_diameter/2, h=vertical_distance);
+    difference() {
+    square([width, vertical_distance - central_gear_height / 2]);
+    translate([width, gap, 0])
+      circle(gap);
   }
 }
 
@@ -111,14 +120,7 @@ module gear_reel(central_angle, peripheral_angle, helix_angle) {
   }
 }
 
-module pitman_arm(driver_angle) {
-  rotate(90, [1, 0, 0])
-    cylinder(r=rod_diameter / 2,
-             h=pitman_length);
-
-}
-
-module gearbox() {
+module engine() {
   // The central driver, attached to the windmill helix
   worm(modul, central_teeth, threads, central_pressure_angle, central_helix_angle, worm_length, rotation);
 
@@ -157,17 +159,17 @@ module gearbox() {
 
   translate([x - d, y, z])
     rotate([0, 0, pitman_angle])
-    pitman_arm();
+    pitman_arm(pitman_length);
   translate([-x + d, y, z])
     rotate([0, 0, -pitman_angle])
-    pitman_arm();
+    pitman_arm(pitman_length);
 
   translate([x - d, y, -z])
     rotate([0, 0, pitman_angle])
-    pitman_arm();
+    pitman_arm(pitman_length);
   translate([-x + d, y, -z])
     rotate([0, 0, -pitman_angle])
-    pitman_arm();
+    pitman_arm(pitman_length);
 
   // The pump handle holder
   translate([0,
@@ -183,7 +185,20 @@ module gearbox() {
              -pump_distance,
              0])
   rotate(90, [1, 0, 0])
-    pump(pump_course, 0);
+    pump(pump_course);
 }
 
-gearbox();
+
+module windmill() {
+  engine();
+  chassi(
+         gear_distance = d,
+         gear_radius = central_teeth * modul / 2,
+         gear_height = central_gear_height,
+         rod_diameter = rod_diameter,
+         thickness = case_thickness,
+         clearance = modul / 2
+         );
+}
+
+windmill();
