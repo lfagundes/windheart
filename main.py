@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from solid import (import_scad, scad_render,
+from solid import (import_scad, scad_render_animated,
                    translate, rotate, difference, union,
                    square, circle, rotate_extrude,
                    cylinder)
@@ -8,8 +8,6 @@ from math import pi, ceil
 from math_degree import sin, cos, asin
 
 import pump, pitman, chassi
-
-rotation = 0 #$t * 360 ;
 
 # Gear traction will be given by these
 threads = 3;
@@ -173,7 +171,7 @@ def gear_reel(central_angle, peripheral_angle, peripheral_teeth_angle):
     )
 
 
-def engine():
+def engine(rotation):
     engine = union()(
         # The main driver, attached to the windmill helix, driving two gear reels
         worm(modul, central_teeth, threads, central_pressure_angle, central_helix_angle, worm_length, rotation),
@@ -252,14 +250,24 @@ def engine():
 
     return engine
 
-windmill = engine()
-windmill += chassi.chassi(
-    gear_distance = d,
-    gear_radius = central_teeth * modul / 2,
-    gear_height = central_gear_height,
-    rod_diameter = rod_diameter,
-    thickness = case_thickness,
-    clearance = modul / 2
+def windmill(_time=0):
+    rotation = _time * 360
+    return union()(
+        engine(rotation),
+        chassi.chassi(
+            gear_distance = d,
+            gear_radius = central_teeth * modul / 2,
+            gear_height = central_gear_height,
+            rod_diameter = rod_diameter,
+            thickness = case_thickness,
+            clearance = modul / 2
+        ),
+    )
+
+scad_code = scad_render_animated(
+    windmill,
+    steps=360,
+    back_and_forth=False,
 )
 
-open('windmill.scad', 'w').write(scad_render(windmill))
+open('windmill.scad', 'w').write(scad_code)
